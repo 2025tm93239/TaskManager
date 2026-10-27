@@ -26,6 +26,7 @@ public sealed class TaskManagerService : TaskService.TaskServiceBase
         return System.Threading.Tasks.Task.FromResult(ToProto(created));
     }
 
+
     public override async Task<Grpc.Task> GetTask(GetTaskRequest request, ServerCallContext context)
     {
         if (request.Id < 1)

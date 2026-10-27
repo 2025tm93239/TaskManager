@@ -4,39 +4,40 @@ using TaskManager.Grpc;
 
 const string serverAddress = "http://localhost:5081";
 
-using var channel = GrpcChannel.ForAddress(serverAddress);
-var client = new TaskService.TaskServiceClient(channel);
+using var grpcChannel = GrpcChannel.ForAddress(serverAddress);
+var taskServiceClient = new TaskService.TaskServiceClient(grpcChannel);
 
 Console.WriteLine($"Connected to Task Manager at {serverAddress}");
 Console.WriteLine();
 
-Console.WriteLine("--- Create three tasks ---");
-var task1 = await client.CreateTaskAsync(new CreateTaskRequest { Title = "Write proto file" });
-var task2 = await client.CreateTaskAsync(new CreateTaskRequest { Title = "Implement gRPC service" });
-var task3 = await client.CreateTaskAsync(new CreateTaskRequest { Title = "Build gRPC client" });
-PrintTask("Created", task1);
-PrintTask("Created", task2);
-PrintTask("Created", task3);
+Console.WriteLine("--- TasK Manager servvice will Create three tasks ---");
+var firstTask = await taskServiceClient.CreateTaskAsync(new CreateTaskRequest { Title = "Write proto file" });
+var secondTask = await taskServiceClient.CreateTaskAsync(new CreateTaskRequest { Title = "Implement gRPC service" });
+var thirdTask = await taskServiceClient.CreateTaskAsync(new CreateTaskRequest { Title = "Build gRPC client" });
+PrintTask("Created", firstTask);
+PrintTask("Created", secondTask);
+PrintTask("Created", thirdTask);
 Console.WriteLine();
 
-Console.WriteLine("--- Fetch task #2 (1-second deadline) ---");
+Console.WriteLine("--- Fetch task #2 (GetTask with 1-second client deadline) ---");
 try
 {
     var deadline = DateTime.UtcNow.AddSeconds(1);
-    var fetched = await client.GetTaskAsync(
-        new GetTaskRequest { Id = task2.Id },
+    var fetched = await taskServiceClient.GetTaskAsync(
+        new GetTaskRequest { Id = secondTask.Id },
         new CallOptions(deadline: deadline));
     PrintTask("Fetched", fetched);
+    Console.WriteLine("GetTask completed before the 1-second deadline.");
 }
 catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
 {
-    Console.WriteLine("GetTask timed out after 1 second (DeadlineExceeded).");
+    Console.WriteLine("GetTask handled timeout gracefully: DEADLINE_EXCEEDED.");
     Console.WriteLine($"Details: {ex.Status.Detail}");
 }
 Console.WriteLine();
 
 Console.WriteLine("--- List all tasks (server streaming) ---");
-using (var listCall = client.ListTasks(new ListTasksRequest()))
+using (var listCall = taskServiceClient.ListTasks(new ListTasksRequest()))
 {
     await foreach (var task in listCall.ResponseStream.ReadAllAsync())
     {
@@ -46,12 +47,12 @@ using (var listCall = client.ListTasks(new ListTasksRequest()))
 Console.WriteLine();
 
 Console.WriteLine("--- Stream three task updates (bidirectional) ---");
-using var streamCall = client.StreamTaskUpdates();
+using var streamCall = taskServiceClient.StreamTaskUpdates();
 var updates = new[]
 {
-    new TaskUpdateRequest { Id = task1.Id, Status = "in_progress" },
-    new TaskUpdateRequest { Id = task2.Id, Status = "done" },
-    new TaskUpdateRequest { Id = task3.Id, Status = "in_progress" }
+    new TaskUpdateRequest { Id = firstTask.Id, Status = "in_progress" },
+    new TaskUpdateRequest { Id = secondTask.Id, Status = "done" },
+    new TaskUpdateRequest { Id = thirdTask.Id, Status = "in_progress" }
 };
 
 var readResponses = System.Threading.Tasks.Task.Run(async () =>
@@ -72,45 +73,56 @@ await streamCall.RequestStream.CompleteAsync();
 await readResponses;
 Console.WriteLine();
 
-Console.WriteLine("--- Error handling demos ---");
+Console.WriteLine("--- Assignment error cases (server status codes) ---");
+
+//To test INVALID_ARGUMENT: If GetTaskRequest.id < 1, return INVALID_ARGUMENT
 await ExpectRpcError(
-    "GetTask with id=0",
-    async () => await client.GetTaskAsync(new GetTaskRequest { Id = 0 }),
+    "Error -  GetTask id < 1 → INVALID_ARGUMENT",
+    async () => await taskServiceClient.GetTaskAsync(new GetTaskRequest { Id = 0 }),
     StatusCode.InvalidArgument);
 
+//To test NOT_FOUND error
 await ExpectRpcError(
-    "GetTask for missing task",
-    async () => await client.GetTaskAsync(new GetTaskRequest { Id = 9_999 }),
+    "Error: GetTask missing id → NOT_FOUND",
+    async () => await taskServiceClient.GetTaskAsync(new GetTaskRequest { Id = 9_999 }),
     StatusCode.NotFound);
 
+//To Test FAILED_PRECONDITION scenario
 await ExpectRpcError(
-    "UpdateTask with invalid status",
-    async () => await client.UpdateTaskAsync(new UpdateTaskRequest { Id = task1.Id, Status = "blocked" }),
+    "Error - UpdateTask invalid status → FAILED_PRECONDITION",
+    async () => await taskServiceClient.UpdateTaskAsync(new UpdateTaskRequest { Id = firstTask.Id, Status = "blocked" }),
     StatusCode.FailedPrecondition);
+
 Console.WriteLine();
 
 if (args.Contains("--demo-deadline", StringComparer.OrdinalIgnoreCase))
 {
-    Console.WriteLine("--- GetTask deadline demo (service should use GetTaskDelaySeconds=2) ---");
+    Console.WriteLine("--- Extra GetTask deadline call (service GetTaskDelaySeconds=2) ---");
     try
     {
         var deadline = DateTime.UtcNow.AddSeconds(1);
-        await client.GetTaskAsync(new GetTaskRequest { Id = task1.Id }, new CallOptions(deadline: deadline));
-        Console.WriteLine("GetTask completed within the deadline.");
+        await taskServiceClient.GetTaskAsync(new GetTaskRequest { Id = firstTask.Id }, new CallOptions(deadline: deadline));
+        Console.WriteLine("GetTask completed before the 1-second deadline.");
     }
     catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
     {
-        Console.WriteLine("Handled timeout gracefully: DeadlineExceeded.");
+        Console.WriteLine("GetTask handled timeout gracefully: DEADLINE_EXCEEDED.");
         Console.WriteLine($"Details: {ex.Status.Detail}");
     }
 }
 else
 {
-    Console.WriteLine("Tip: run with --demo-deadline after starting the service with GetTaskDelaySeconds=2.");
+
+    Console.WriteLine(
+        "Deadline timeout screenshot: start TaskManager.Service with profile http-deadline-demo " +
+        "(GetTask sleeps 2s); Fetch task #2 above will show DEADLINE_EXCEEDED.");
 }
 
 Console.WriteLine();
-Console.WriteLine("Client finished.");
+
+Console.WriteLine("Client finished its execution.");
+Console.WriteLine("Press Enter to close the client application...");
+Console.ReadLine();
 
 static void PrintTask(string label, TaskManager.Grpc.Task task) =>
     Console.WriteLine($"{label}: id={task.Id}, title=\"{task.Title}\", status={task.Status}");
@@ -127,6 +139,20 @@ static async System.Threading.Tasks.Task ExpectRpcError(
     }
     catch (RpcException ex) when (ex.StatusCode == expected)
     {
-        Console.WriteLine($"{scenario}: received {ex.StatusCode} as expected ({ex.Status.Detail}).");
+        Console.WriteLine($"{scenario}: OK — {ToGrpcCodeName(ex.StatusCode)} ({ex.Status.Detail}).");
+    }
+    catch (RpcException ex)
+    {
+        Console.WriteLine($"{scenario}: unexpected gRPC status {ToGrpcCodeName(ex.StatusCode)} ({ex.Status.Detail}).");
     }
 }
+
+
+static string ToGrpcCodeName(StatusCode code) => code switch
+{
+    StatusCode.InvalidArgument => "INVALID_ARGUMENT",
+    StatusCode.NotFound => "NOT_FOUND",
+    StatusCode.FailedPrecondition => "FAILED_PRECONDITION",
+    StatusCode.DeadlineExceeded => "DEADLINE_EXCEEDED",
+    _ => code.ToString()
+};
