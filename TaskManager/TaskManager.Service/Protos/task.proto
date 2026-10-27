@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+option csharp_namespace = "TaskManager.Grpc";
+
+package taskmanager;
+
+message Task {
+  int32 id = 1;
+  string title = 2;
+  string status = 3;
+}
+
+message CreateTaskRequest {
+  string title = 1;
+}
+
+message GetTaskRequest {
+  int32 id = 1;
+}
+
+message UpdateTaskRequest {
+  int32 id = 1;
+  string status = 2;
+}
+
+message ListTasksRequest {}
+
+message TaskUpdateRequest {
+  int32 id = 1;
+  string status = 2;
+}
+
+message TaskUpdateReply {
+  Task task = 1;
+  string message = 2;
+}
+
+service TaskService {
+  rpc CreateTask(CreateTaskRequest) returns (Task);
+  rpc GetTask(GetTaskRequest) returns (Task);
+  rpc ListTasks(ListTasksRequest) returns (stream Task);
+  rpc UpdateTask(UpdateTaskRequest) returns (Task);
+  rpc StreamTaskUpdates(stream TaskUpdateRequest) returns (stream TaskUpdateReply);
+}
