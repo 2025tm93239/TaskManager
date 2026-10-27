@@ -7,7 +7,9 @@ public static class TaskStatusValidator
         "pending",
         "in_progress",
         "done"
+
     };
+
 
     public static bool IsValid(string status) => AllowedStatuses.Contains(status);
 }

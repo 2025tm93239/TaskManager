@@ -6,3 +6,5 @@
 /TaskManager/TaskManager.Client/obj
 /TaskManager/TaskManager.Service/obj/Debug/net10.0
 /TaskManager/TaskManager.Service/obj
+/TaskManager/TaskManager.Client/bin/Debug/net10.0
+/TaskManager/TaskManager.Service/bin/Debug/net10.0
