@@ -11,27 +11,24 @@ message Task
   string status = 3;
 }
 
-
 message CreateTaskRequest 
 {
   string title = 1;
 }
 
-message GetTaskRequest 
+message GetTaskRequest
 {
   int32 id = 1;
 }
 
-message UpdateTaskRequest 
-{
+message UpdateTaskRequest {
   int32 id = 1;
   string status = 2;
 }
 
 message ListTasksRequest {}
 
-message TaskUpdateRequest 
-{
+message TaskUpdateRequest {
   int32 id = 1;
   string status = 2;
 }
@@ -43,15 +40,9 @@ message TaskUpdateReply
 }
 
 service TaskService {
-  //To create a new task
-	rpc CreateTask(CreateTaskRequest) returns (Task);
-
-	//To get task
+  rpc CreateTask(CreateTaskRequest) returns (Task);
   rpc GetTask(GetTaskRequest) returns (Task);
-
   rpc ListTasks(ListTasksRequest) returns (stream Task);
   rpc UpdateTask(UpdateTaskRequest) returns (Task);
-
-  //This is used to stream task updates 
   rpc StreamTaskUpdates(stream TaskUpdateRequest) returns (stream TaskUpdateReply);
 }

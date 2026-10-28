@@ -1,11 +1,11 @@
-# Task Manager
+# Task Manager (Assignment Q1)
 
-gRPC-based Task Manager **service** (`TaskManager.Service`) with console client (`TaskManager.Client`).
+gRPC task manager in C# - server and console client.
 
-## Structure
+## How to run
 
-```
-TaskManager/
+1. Open terminal and start server:
+   ```TaskManager/
 ├── TaskManager.slnx
 ├── TaskManager.Service/
 │   ├── Protos/task.proto
@@ -14,57 +14,42 @@ TaskManager/
 │   └── Program.cs
 └── TaskManager.Client/
     └── Program.cs
-```
+   cd TaskManager
+   dotnet run --project TaskManager.Service
+   ```
+   Server listens on http://localhost:5081
+
+2. Open another terminal and run client:
+   ```
+   dotnet run --project TaskManager.Client
+   ```
 
 ## Build
 
-```bash
-cd TaskManager
+```
 dotnet build TaskManager.slnx
 ```
-
-## Run
-
-**Terminal 1 — service:**
-
-```bash
-dotnet run --project TaskManager.Service --launch-profile http
-```
-
-**Terminal 2 — client:**
-
-```bash
-dotnet run --project TaskManager.Client
-```
-
-Service URL: `http://localhost:5081` (HTTP/2).
-
-## Assignment Q1 — error codes and deadline (already implemented)
-
-| Requirement | Server (`TaskManagerService.cs`) | Client (`Program.cs`) |
-|-------------|----------------------------------|------------------------|
-| `GetTask` id &lt; 1 → `INVALID_ARGUMENT` | `GetTask` throws `InvalidArgument` | `GetTask` with `id=0` |
-| Task not found → `NOT_FOUND` | `GetTask` / `UpdateTask` | `GetTask` with `id=9999` |
-| Invalid status → `FAILED_PRECONDITION` | `UpdateTask`, `StreamTaskUpdates` | `UpdateTask` with `status=blocked` |
-| `GetTask` with **1s deadline** | — | Fetch task #2 uses `CallOptions(deadline: …)` |
-| Server sleeps **2s**, client handles timeout | `TaskService:GetTaskDelaySeconds` | Same fetch #2 catches `DeadlineExceeded` |
-
 **Visual Studio — timeout screenshot**
 
 1. Run **TaskManager.Service** with launch profile **`http-deadline-demo`** (2s delay on `GetTask`).
 2. Run **TaskManager.Client** (default profile). Section *Fetch task #2* should print `DEADLINE_EXCEEDED`.
 
-**CLI — deadline demo**
+## Deadline timeout demo
 
-```bash
+Assignment needs client GetTask with 1 second deadline while server waits 2 seconds.
+
+Run server with launch profile `http-deadline-demo` (sets 2 sec delay on GetTask):
+```
 dotnet run --project TaskManager.Service --launch-profile http-deadline-demo
-dotnet run --project TaskManager.Client
 ```
 
-Optional second deadline call: client profile **`deadline-demo`** or `--demo-deadline`.
+Then run the client - the GetTask step should show DEADLINE_EXCEEDED.
 
-## Assignment coverage
+## What is implemented
 
-- RPCs: `CreateTask`, `GetTask`, `ListTasks` (server stream), `UpdateTask`, `StreamTaskUpdates` (bidirectional)
-- In-memory store, incremental IDs, status validation (`pending`, `in_progress`, `done`)
-- Errors: `INVALID_ARGUMENT` (id &lt; 1), `NOT_FOUND`, `FAILED_PRECONDITION`
+- CreateTask, GetTask, ListTasks (server stream), UpdateTask, StreamTaskUpdates (bidirectional)
+- Tasks stored in memory with auto increment id
+- Status must be pending, in_progress or done
+- GetTask id less than 1 -> INVALID_ARGUMENT
+- Task not found -> NOT_FOUND
+- Bad status -> FAILED_PRECONDITION
